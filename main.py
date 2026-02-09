@@ -12,41 +12,7 @@ def fmt(val, is_pct):
     if val is None: return ""
     if is_pct: return f"{val:.2f}%"
     return f"{int(val):,}".replace(',', ' ')
-# ... (نفس Imports والدوال الأولى كتبقى هي هي) ...
 
-@app.post("/parse-pdf")
-async def parse_pdf(file: UploadFile = File(...)):
-    content = await file.read()
-    text = ""
-    with pdfplumber.open(io.BytesIO(content)) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text() + "\n"
-    
-    flat_text = text.replace('\n', ' ')
-
-    # --- 1. Metadata (FIXED VOTING SHEET) 🎯 ---
-    
-    voting_sheet = ""
-    
-    # المحاولة 1: البحث عن النمط المحدد Vxxxxxx/xx (V + 6 أرقام + / + رقمين)
-    # هذا هو النمط اللي بان فالتصويرة ديالك: V112133/01
-    direct_match = re.search(r"(V\d{6}/\d{2})", text)
-    
-    if direct_match:
-        voting_sheet = direct_match.group(1)
-    else:
-        # المحاولة 2 (احتياطية): البحث عن أي كلمة تبدأ بـ V وفيها سلاش
-        # مثلا: V123/01
-        loose_match = re.search(r"\b(V\d+/\d+)\b", text)
-        if loose_match:
-            voting_sheet = loose_match.group(1)
-        else:
-            # المحاولة 3: الطريقة القديمة (بحث عن السياق)
-            context_match = re.search(r"voting\s+sheet\s*[:\.]?\s*([A-Za-z0-9\-/]+)", text, re.IGNORECASE)
-            if context_match:
-                voting_sheet = context_match.group(1)
-
-    # ... (باقي الكود ديال Draft Number و Date و الأرقام يبقى كما هو فالميساج السابق V10) ...
 @app.post("/parse-pdf")
 async def parse_pdf(file: UploadFile = File(...)):
     content = await file.read()
