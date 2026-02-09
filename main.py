@@ -36,6 +36,12 @@ def fmt(val, is_pct):
     if is_pct: return f"{val:.2f}%"
     return f"{int(val):,}".replace(',', ' ')
 
+def clean_date(text):
+    if not text: return ""
+    match = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})", text)
+    if match: return match.group(1).replace('-', '/')
+    return ""
+
 @app.post("/parse-pdf")
 async def parse_pdf(file: UploadFile = File(...)):
     content = await file.read()
@@ -54,14 +60,8 @@ async def parse_pdf(file: UploadFile = File(...)):
     draft_number = extract_text(r"(?:RegCom\s+)?Number\s+of\s+draft\s+implementing\s+act/measure\s*[:\.]?\s*(.*)", text)
     
     raw_date = extract_text(r"Date\s+of\s+(?:delivery|vote|opinion).*?[:\.]?\s*(.*)", text)
-    date_opinion = ""
-    if raw_date:
-        date_match = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})", raw_date)
-        if date_match: date_opinion = date_match.group(1).replace('-', '/')
-    
-    if not date_opinion:
-        date_match_all = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})", text)
-        if date_match_all: date_opinion = date_match_all.group(1).replace('-', '/')
+    date_opinion = clean_date(raw_date)
+    if not date_opinion: date_opinion = clean_date(text)
 
     consensus = extract_text(r"Consensus\s*[:\.]?\s*(.*)", text)
 
@@ -82,11 +82,11 @@ async def parse_pdf(file: UploadFile = File(...)):
     final_sum_pop = ""
     pop_for_out, pop_ag_out, pop_abs_out = "", "", ""
 
-    
+    # Check if population data exists at all
     has_any_pop_data = (pop_for is not None or pop_ag is not None or pop_abs is not None)
     
     if has_any_pop_data:
-        # Check for Absolute Numbers
+        # Check for Absolute Numbers (Big numbers > 100)
         is_huge = False
         for val in [pop_for, pop_ag, pop_abs]:
             if val is not None and val > 100:
@@ -94,7 +94,7 @@ async def parse_pdf(file: UploadFile = File(...)):
         
         is_pct_mode = (is_pct_for or is_pct_ag or is_pct_abs) and not is_huge
         
-        
+        # Temp values for calculation (treat None as 0.0)
         c_for = pop_for if pop_for is not None else 0.0
         c_ag = pop_ag if pop_ag is not None else 0.0
         c_abs = pop_abs if pop_abs is not None else 0.0
@@ -117,11 +117,12 @@ async def parse_pdf(file: UploadFile = File(...)):
             pop_ag_out = fmt(pop_ag, False) if pop_ag is not None else ""
             pop_abs_out = fmt(pop_abs, False) if pop_abs is not None else ""
 
-        
+        # Only calculate Sum Number if Population data exists (Client Request)
         if all(x is not None for x in [num_for, num_ag, num_abs, num_not]):
             final_sum_num = str(int(num_for + num_ag + num_abs + num_not))
 
     else:
+        # ⚠️ No Population Data => Leave EVERYTHING blank
         pop_for_out = ""
         pop_ag_out = ""
         pop_abs_out = ""
